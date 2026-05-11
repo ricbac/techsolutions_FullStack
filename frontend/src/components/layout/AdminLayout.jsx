@@ -30,6 +30,7 @@ function AdminLayout() {
   const { logout, usuario } = useAuth()
   const navigate = useNavigate()
   const [noLeidas, setNoLeidas] = useState(0)
+  const [sidebarAbierto, setSidebarAbierto] = useState(false)
 
   useEffect(() => {
     const cargarConteo = async () => {
@@ -52,12 +53,26 @@ function AdminLayout() {
 
   const cerrarSesion = () => {
     logout()
+    setSidebarAbierto(false)
     navigate('/login', { replace: true })
   }
 
+  const cerrarSidebar = () => setSidebarAbierto(false)
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
-      <aside className="fixed inset-y-0 left-0 hidden w-72 flex-col border-r border-slate-800 bg-slate-950 px-5 py-6 lg:flex">
+      {sidebarAbierto && (
+        <button
+          type="button"
+          aria-label="Cerrar menu"
+          onClick={cerrarSidebar}
+          className="fixed inset-0 z-30 bg-slate-950/70 backdrop-blur-sm lg:hidden"
+        />
+      )}
+
+      <aside className={`fixed inset-y-0 left-0 z-40 flex w-72 max-w-[86vw] flex-col border-r border-slate-800 bg-slate-950 px-5 py-6 transition-transform duration-200 lg:translate-x-0 ${
+        sidebarAbierto ? 'translate-x-0' : '-translate-x-full'
+      } lg:flex`}>
         <div className="shrink-0">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-400">
             TechSolutions
@@ -71,6 +86,7 @@ function AdminLayout() {
               <NavLink
                 key={nombre}
                 to={ruta}
+                onClick={cerrarSidebar}
                 className={({ isActive }) =>
                   `flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm font-medium transition ${
                     isActive
@@ -122,6 +138,7 @@ function AdminLayout() {
             <div className="flex items-center gap-3">
               <button
                 type="button"
+                onClick={() => setSidebarAbierto(true)}
                 className="rounded-lg border border-slate-800 p-2 text-slate-300 lg:hidden"
                 aria-label="Abrir menu"
               >
