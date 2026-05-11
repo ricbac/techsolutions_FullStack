@@ -1,0 +1,7 @@
+
+> backend@1.0.0 start
+> node server.js
+
+◇ injected env (3) from .env // tip: ⌁ auth for agents [www.vestauth.com]
+◇ injected env (0) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+Servidor backend ejecutandose en http://localhost:4510
