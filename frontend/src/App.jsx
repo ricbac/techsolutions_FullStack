@@ -17,7 +17,9 @@ import NotificacionesClientePage from './pages/cliente/NotificacionesClientePage
 import PerfilClientePage from './pages/cliente/PerfilClientePage'
 import ProyectosClientePage from './pages/cliente/ProyectosClientePage'
 import TareasClientePage from './pages/cliente/TareasClientePage'
+import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import LoginPage from './pages/LoginPage'
+import ResetPasswordPage from './pages/ResetPasswordPage'
 
 function RutaInicial() {
   const { usuario, autenticado, cargandoSesion } = useAuth()
@@ -48,6 +50,8 @@ function App() {
     <Routes>
       <Route path="/" element={<RutaInicial />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
 
       <Route element={<ProtectedRoute rolesPermitidos={['Administrador']} />}>
         <Route element={<AdminLayout />}>

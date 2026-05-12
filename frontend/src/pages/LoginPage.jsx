@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { LockKeyhole, Mail } from 'lucide-react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 function obtenerRutaPorRol(nombreRol) {
@@ -98,7 +98,7 @@ function LoginPage() {
                 </label>
 
                 <label className="block">
-                  <span className="text-sm font-semibold text-slate-700">Contrasena</span>
+                  <span className="text-sm font-semibold text-slate-700">Contraseña</span>
                   <span className="mt-2 flex items-center gap-3 rounded-lg border border-slate-300 bg-white px-3 py-3 focus-within:border-sky-500 focus-within:ring-4 focus-within:ring-sky-100">
                     <LockKeyhole className="h-5 w-5 text-slate-400" />
                     <input
@@ -107,12 +107,18 @@ function LoginPage() {
                       value={formulario.password}
                       onChange={actualizarCampo}
                       className="w-full border-0 bg-transparent text-sm text-slate-950 outline-none placeholder:text-slate-400"
-                      placeholder="Tu contrasena"
+                      placeholder="Tu contraseña"
                       autoComplete="current-password"
                       required
                     />
                   </span>
                 </label>
+
+                <div className="text-right">
+                  <Link to="/forgot-password" className="text-sm font-semibold text-sky-700 hover:text-sky-600">
+                    ¿Olvidaste tu contraseña?
+                  </Link>
+                </div>
 
                 {error && (
                   <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
