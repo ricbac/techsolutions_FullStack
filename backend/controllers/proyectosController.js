@@ -139,9 +139,55 @@ const insertarGruposProyecto = async (db, idProyecto, grupos) => {
   }
 }
 
+const obtenerClientesDeGrupos = async (db, grupos) => {
+  if (!grupos.length) return []
+
+  const integrantesQuery = await db.query(
+    `
+      SELECT DISTINCT
+        u.id_usuario,
+        u.nombre,
+        u.correo,
+        u.empresa
+      FROM tb_grupo_clientes gc
+      INNER JOIN tb_usuarios u ON u.id_usuario = gc.id_usuario
+      WHERE gc.id_grupo = ANY($1::BIGINT[])
+      ORDER BY u.nombre ASC
+    `,
+    [grupos],
+  )
+
+  return integrantesQuery.rows
+}
+
+const validarDuplicadosClientesGrupos = async (db, clientes, grupos) => {
+  if (!clientes.length || !grupos.length) return { valido: true }
+
+  const integrantes = await obtenerClientesDeGrupos(db, grupos)
+  const clientesDirectos = new Set(clientes.map(Number))
+  const duplicado = integrantes.find((cliente) =>
+    clientesDirectos.has(Number(cliente.id_usuario)),
+  )
+
+  if (!duplicado) return { valido: true }
+
+  return {
+    valido: false,
+    mensaje: `El cliente ${duplicado.nombre} ya pertenece a un grupo asignado a este proyecto. No es necesario asignarlo individualmente.`,
+  }
+}
+
 const listarProyectos = async (req, res) => {
   try {
     const proyectosQuery = await pool.query(`
+      WITH clientes_relacionados AS (
+        SELECT id_proyecto, id_cliente AS id_usuario
+        FROM tb_proyecto_clientes
+        UNION
+        SELECT pg.id_proyecto, gc.id_usuario
+        FROM tb_proyecto_grupos pg
+        INNER JOIN tb_grupo_clientes gc ON gc.id_grupo = pg.id_grupo
+      )
       SELECT
         p.id_proyecto,
         p.nombre,
@@ -154,6 +200,9 @@ const listarProyectos = async (req, res) => {
         p.fecha_creacion,
         p.fecha_actualizacion,
         u.nombre AS creado_por_nombre,
+        COUNT(DISTINCT pc.id_cliente)::INT AS clientes_individuales_count,
+        COUNT(DISTINCT pg.id_grupo)::INT AS grupos_count,
+        COUNT(DISTINCT cr.id_usuario)::INT AS clientes_relacionados_count,
         COUNT(DISTINCT pc.id_cliente)::INT AS clientes_asignados,
         COUNT(DISTINCT pg.id_grupo)::INT AS grupos_asignados,
         COUNT(DISTINCT t.id_tarea)::INT AS total_tareas,
@@ -162,6 +211,7 @@ const listarProyectos = async (req, res) => {
       LEFT JOIN tb_usuarios u ON u.id_usuario = p.creado_por
       LEFT JOIN tb_proyecto_clientes pc ON pc.id_proyecto = p.id_proyecto
       LEFT JOIN tb_proyecto_grupos pg ON pg.id_proyecto = p.id_proyecto
+      LEFT JOIN clientes_relacionados cr ON cr.id_proyecto = p.id_proyecto
       LEFT JOIN tb_tareas t ON t.id_proyecto = p.id_proyecto
       GROUP BY p.id_proyecto, u.nombre
       ORDER BY p.fecha_creacion DESC
@@ -225,6 +275,74 @@ const obtenerProyectoPorId = async (req, res) => {
       [id],
     )
 
+    const clientesPorGrupoQuery = await pool.query(
+      `
+        SELECT
+          g.id_grupo,
+          g.nombre AS grupo,
+          u.id_usuario,
+          u.nombre,
+          u.correo,
+          u.empresa
+        FROM tb_proyecto_grupos pg
+        INNER JOIN tb_grupos g ON g.id_grupo = pg.id_grupo
+        INNER JOIN tb_grupo_clientes gc ON gc.id_grupo = g.id_grupo
+        INNER JOIN tb_usuarios u ON u.id_usuario = gc.id_usuario
+        WHERE pg.id_proyecto = $1
+        ORDER BY g.nombre ASC, u.nombre ASC
+      `,
+      [id],
+    )
+
+    const clientesRelacionadosQuery = await pool.query(
+      `
+        WITH directos AS (
+          SELECT
+            u.id_usuario,
+            u.nombre,
+            u.correo,
+            u.empresa,
+            TRUE AS es_individual,
+            FALSE AS es_grupo
+          FROM tb_proyecto_clientes pc
+          INNER JOIN tb_usuarios u ON u.id_usuario = pc.id_cliente
+          WHERE pc.id_proyecto = $1
+        ),
+        por_grupo AS (
+          SELECT
+            u.id_usuario,
+            u.nombre,
+            u.correo,
+            u.empresa,
+            FALSE AS es_individual,
+            TRUE AS es_grupo
+          FROM tb_proyecto_grupos pg
+          INNER JOIN tb_grupo_clientes gc ON gc.id_grupo = pg.id_grupo
+          INNER JOIN tb_usuarios u ON u.id_usuario = gc.id_usuario
+          WHERE pg.id_proyecto = $1
+        ),
+        unidos AS (
+          SELECT * FROM directos
+          UNION ALL
+          SELECT * FROM por_grupo
+        )
+        SELECT
+          id_usuario,
+          nombre,
+          correo,
+          empresa,
+          CASE
+            WHEN BOOL_OR(es_individual) AND BOOL_OR(es_grupo) THEN 'individual_grupo'
+            WHEN BOOL_OR(es_individual) THEN 'individual'
+            ELSE 'grupo'
+          END AS origen
+        FROM unidos
+        GROUP BY id_usuario, nombre, correo, empresa
+        ORDER BY nombre ASC
+      `,
+      [id],
+    )
+
     const tareasQuery = await pool.query(
       `
         SELECT
@@ -281,12 +399,20 @@ const obtenerProyectoPorId = async (req, res) => {
             ),
             0
           ) AS progreso
-        FROM tb_proyecto_clientes pc
-        INNER JOIN tb_usuarios u ON u.id_usuario = pc.id_cliente
+        FROM (
+          SELECT id_cliente AS id_usuario
+          FROM tb_proyecto_clientes
+          WHERE id_proyecto = $1
+          UNION
+          SELECT gc.id_usuario
+          FROM tb_proyecto_grupos pg
+          INNER JOIN tb_grupo_clientes gc ON gc.id_grupo = pg.id_grupo
+          WHERE pg.id_proyecto = $1
+        ) relacionados
+        INNER JOIN tb_usuarios u ON u.id_usuario = relacionados.id_usuario
         LEFT JOIN tb_tareas t
-          ON t.id_proyecto = pc.id_proyecto
+          ON t.id_proyecto = $1
           AND t.asignado_a = u.id_usuario
-        WHERE pc.id_proyecto = $1
         GROUP BY u.id_usuario
         ORDER BY u.nombre ASC
       `,
@@ -296,7 +422,19 @@ const obtenerProyectoPorId = async (req, res) => {
     const metricasQuery = await pool.query(
       `
         SELECT
-          (SELECT COUNT(DISTINCT id_cliente) FROM tb_proyecto_clientes WHERE id_proyecto = $1)::INT AS total_clientes,
+          (
+            SELECT COUNT(DISTINCT id_usuario)
+            FROM (
+              SELECT id_cliente AS id_usuario
+              FROM tb_proyecto_clientes
+              WHERE id_proyecto = $1
+              UNION
+              SELECT gc.id_usuario
+              FROM tb_proyecto_grupos pg
+              INNER JOIN tb_grupo_clientes gc ON gc.id_grupo = pg.id_grupo
+              WHERE pg.id_proyecto = $1
+            ) relacionados
+          )::INT AS total_clientes,
           (SELECT COUNT(DISTINCT id_grupo) FROM tb_proyecto_grupos WHERE id_proyecto = $1)::INT AS total_grupos,
           COUNT(t.id_tarea)::INT AS total_tareas,
           COUNT(CASE WHEN t.estado = 'pendiente' THEN 1 END)::INT AS tareas_pendientes,
@@ -311,6 +449,9 @@ const obtenerProyectoPorId = async (req, res) => {
     return res.json({
       ...proyectoQuery.rows[0],
       clientes: clientesQuery.rows,
+      clientes_directos: clientesQuery.rows,
+      clientes_por_grupo: clientesPorGrupoQuery.rows,
+      clientes_relacionados: clientesRelacionadosQuery.rows,
       grupos_asignados: gruposQuery.rows,
       progreso_individual_clientes: progresoClientesQuery.rows,
       metricas: metricasQuery.rows[0],
@@ -358,6 +499,16 @@ const crearProyecto = async (req, res) => {
     if (!gruposValidados.valido) {
       await db.query('ROLLBACK')
       return res.status(400).json({ mensaje: gruposValidados.mensaje })
+    }
+
+    const duplicados = await validarDuplicadosClientesGrupos(
+      db,
+      clientesValidados.clientes,
+      gruposValidados.grupos,
+    )
+    if (!duplicados.valido) {
+      await db.query('ROLLBACK')
+      return res.status(400).json({ mensaje: duplicados.mensaje })
     }
 
     const proyectoQuery = await db.query(
@@ -448,6 +599,16 @@ const actualizarProyecto = async (req, res) => {
     if (!gruposValidados.valido) {
       await db.query('ROLLBACK')
       return res.status(400).json({ mensaje: gruposValidados.mensaje })
+    }
+
+    const duplicados = await validarDuplicadosClientesGrupos(
+      db,
+      clientesValidados.clientes,
+      gruposValidados.grupos,
+    )
+    if (!duplicados.valido) {
+      await db.query('ROLLBACK')
+      return res.status(400).json({ mensaje: duplicados.mensaje })
     }
 
     const proyectoQuery = await db.query(
@@ -575,9 +736,22 @@ const listarGruposActivosParaOpciones = async (req, res) => {
         g.id_grupo,
         g.nombre,
         g.descripcion,
-        COUNT(gc.id_usuario)::INT AS integrantes_count
+        COUNT(gc.id_usuario)::INT AS integrantes_count,
+        COALESCE(
+          JSON_AGG(
+            JSON_BUILD_OBJECT(
+              'id_usuario', u.id_usuario,
+              'nombre', u.nombre,
+              'correo', u.correo,
+              'empresa', u.empresa
+            )
+            ORDER BY u.nombre
+          ) FILTER (WHERE u.id_usuario IS NOT NULL),
+          '[]'
+        ) AS integrantes
       FROM tb_grupos g
       LEFT JOIN tb_grupo_clientes gc ON gc.id_grupo = g.id_grupo
+      LEFT JOIN tb_usuarios u ON u.id_usuario = gc.id_usuario
       WHERE g.estado = 'activo'
       GROUP BY g.id_grupo
       ORDER BY g.nombre ASC

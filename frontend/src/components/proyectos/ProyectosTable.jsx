@@ -71,7 +71,8 @@ function ProyectosTable({ proyectos, onEditar, onEliminar, onVerDetalle }) {
                 'Estado',
                 'Prioridad',
                 'Progreso',
-                'Clientes',
+                'Clientes relacionados',
+                'Individuales',
                 'Grupos',
                 'Tareas',
                 'Completadas',
@@ -99,8 +100,15 @@ function ProyectosTable({ proyectos, onEditar, onEliminar, onVerDetalle }) {
                 <td className="px-4 py-4"><EstadoBadge estado={proyecto.estado} /></td>
                 <td className="px-4 py-4"><PrioridadBadge prioridad={proyecto.prioridad} /></td>
                 <td className="px-4 py-4"><Progreso valor={proyecto.progreso} /></td>
-                <td className="px-4 py-4 text-sm text-slate-300">{proyecto.clientes_asignados}</td>
-                <td className="px-4 py-4 text-sm text-slate-300">{proyecto.grupos_asignados}</td>
+                <td className="px-4 py-4 text-sm text-slate-300">
+                  {proyecto.clientes_relacionados_count ?? proyecto.clientes_asignados}
+                </td>
+                <td className="px-4 py-4 text-sm text-slate-300">
+                  {proyecto.clientes_individuales_count ?? proyecto.clientes_asignados}
+                </td>
+                <td className="px-4 py-4 text-sm text-slate-300">
+                  {proyecto.grupos_count ?? proyecto.grupos_asignados}
+                </td>
                 <td className="px-4 py-4 text-sm text-slate-300">{proyecto.total_tareas}</td>
                 <td className="px-4 py-4 text-sm text-slate-300">{proyecto.tareas_completadas}</td>
                 <td className="px-4 py-4 text-sm text-slate-300">
@@ -135,8 +143,15 @@ function ProyectosTable({ proyectos, onEditar, onEliminar, onVerDetalle }) {
 
             <dl className="mt-4 grid gap-3 text-sm">
               <Dato label="Prioridad" value={<PrioridadBadge prioridad={proyecto.prioridad} />} />
-              <Dato label="Clientes individuales" value={proyecto.clientes_asignados} />
-              <Dato label="Grupos" value={proyecto.grupos_asignados} />
+              <Dato
+                label="Clientes relacionados"
+                value={proyecto.clientes_relacionados_count ?? proyecto.clientes_asignados}
+              />
+              <Dato
+                label="Clientes individuales"
+                value={proyecto.clientes_individuales_count ?? proyecto.clientes_asignados}
+              />
+              <Dato label="Grupos" value={proyecto.grupos_count ?? proyecto.grupos_asignados} />
               <Dato label="Tareas" value={proyecto.total_tareas} />
               <Dato label="Completadas" value={proyecto.tareas_completadas} />
               <Dato

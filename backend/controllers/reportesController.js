@@ -93,6 +93,55 @@ const obtenerReporteProyecto = async (req, res) => {
 
     const clientesQuery = await pool.query(
       `
+        WITH directos AS (
+          SELECT
+            u.id_usuario,
+            u.nombre,
+            u.correo,
+            u.empresa,
+            TRUE AS es_individual,
+            FALSE AS es_grupo
+          FROM tb_proyecto_clientes pc
+          INNER JOIN tb_usuarios u ON u.id_usuario = pc.id_cliente
+          WHERE pc.id_proyecto = $1
+        ),
+        por_grupo AS (
+          SELECT
+            u.id_usuario,
+            u.nombre,
+            u.correo,
+            u.empresa,
+            FALSE AS es_individual,
+            TRUE AS es_grupo
+          FROM tb_proyecto_grupos pg
+          INNER JOIN tb_grupo_clientes gc ON gc.id_grupo = pg.id_grupo
+          INNER JOIN tb_usuarios u ON u.id_usuario = gc.id_usuario
+          WHERE pg.id_proyecto = $1
+        ),
+        unidos AS (
+          SELECT * FROM directos
+          UNION ALL
+          SELECT * FROM por_grupo
+        )
+        SELECT
+          id_usuario,
+          nombre,
+          correo,
+          empresa,
+          CASE
+            WHEN BOOL_OR(es_individual) AND BOOL_OR(es_grupo) THEN 'individual_grupo'
+            WHEN BOOL_OR(es_individual) THEN 'individual'
+            ELSE 'grupo'
+          END AS origen
+        FROM unidos
+        GROUP BY id_usuario, nombre, correo, empresa
+        ORDER BY nombre ASC
+      `,
+      [id],
+    )
+
+    const clientesDirectosQuery = await pool.query(
+      `
         SELECT u.id_usuario, u.nombre, u.correo, u.empresa
         FROM tb_proyecto_clientes pc
         INNER JOIN tb_usuarios u ON u.id_usuario = pc.id_cliente
@@ -143,7 +192,19 @@ const obtenerReporteProyecto = async (req, res) => {
     const metricasQuery = await pool.query(
       `
         SELECT
-          (SELECT COUNT(DISTINCT id_cliente) FROM tb_proyecto_clientes WHERE id_proyecto = $1)::INT AS total_clientes,
+          (
+            SELECT COUNT(DISTINCT id_usuario)
+            FROM (
+              SELECT id_cliente AS id_usuario
+              FROM tb_proyecto_clientes
+              WHERE id_proyecto = $1
+              UNION
+              SELECT gc.id_usuario
+              FROM tb_proyecto_grupos pg
+              INNER JOIN tb_grupo_clientes gc ON gc.id_grupo = pg.id_grupo
+              WHERE pg.id_proyecto = $1
+            ) relacionados
+          )::INT AS total_clientes,
           (SELECT COUNT(DISTINCT id_grupo) FROM tb_proyecto_grupos WHERE id_proyecto = $1)::INT AS total_grupos,
           COUNT(t.id_tarea)::INT AS total_tareas,
           COUNT(CASE WHEN t.estado = 'pendiente' THEN 1 END)::INT AS tareas_pendientes,
@@ -171,12 +232,20 @@ const obtenerReporteProyecto = async (req, res) => {
             ),
             0
           ) AS progreso
-        FROM tb_proyecto_clientes pc
-        INNER JOIN tb_usuarios u ON u.id_usuario = pc.id_cliente
+        FROM (
+          SELECT id_cliente AS id_usuario
+          FROM tb_proyecto_clientes
+          WHERE id_proyecto = $1
+          UNION
+          SELECT gc.id_usuario
+          FROM tb_proyecto_grupos pg
+          INNER JOIN tb_grupo_clientes gc ON gc.id_grupo = pg.id_grupo
+          WHERE pg.id_proyecto = $1
+        ) relacionados
+        INNER JOIN tb_usuarios u ON u.id_usuario = relacionados.id_usuario
         LEFT JOIN tb_tareas t
-          ON t.id_proyecto = pc.id_proyecto
+          ON t.id_proyecto = $1
           AND t.asignado_a = u.id_usuario
-        WHERE pc.id_proyecto = $1
         GROUP BY u.id_usuario
         ORDER BY u.nombre ASC
       `,
@@ -186,6 +255,8 @@ const obtenerReporteProyecto = async (req, res) => {
     return res.json({
       proyecto: proyectoQuery.rows[0],
       clientes: clientesQuery.rows,
+      clientes_directos: clientesDirectosQuery.rows,
+      clientes_relacionados: clientesQuery.rows,
       grupos: gruposQuery.rows,
       tareas: tareasQuery.rows,
       metricas: metricasQuery.rows[0],

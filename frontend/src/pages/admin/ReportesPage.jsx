@@ -427,9 +427,14 @@ function ReportesPage() {
       startY = escribirSeccionPDF(doc, 'Metricas del proyecto', startY)
       startY = dibujarMetricasPDF(doc, metricasProyecto, startY)
       startY = agregarTablaPDF(doc, {
-        titulo: 'Clientes asignados',
-        columnas: ['Cliente', 'Empresa', 'Correo'],
-        filas: (clientes || []).map((item) => [item.nombre, item.empresa || 'Sin empresa', item.correo || 'Sin correo']),
+        titulo: 'Clientes relacionados',
+        columnas: ['Cliente', 'Empresa', 'Correo', 'Origen'],
+        filas: (clientes || []).map((item) => [
+          item.nombre,
+          item.empresa || 'Sin empresa',
+          item.correo || 'Sin correo',
+          formatearTexto(item.origen),
+        ]),
         startY,
       })
       startY = agregarTablaPDF(doc, {

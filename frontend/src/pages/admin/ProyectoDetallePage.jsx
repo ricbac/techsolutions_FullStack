@@ -95,6 +95,10 @@ function ProyectoDetallePage() {
 
   if (!proyecto) return null
 
+  const clientesDirectos = proyecto.clientes_directos || proyecto.clientes || []
+  const gruposAsignados = proyecto.grupos_asignados || []
+  const clientesRelacionados = proyecto.clientes_relacionados || clientesDirectos
+  const progresoIndividual = proyecto.progreso_individual_clientes || []
   const metricas = proyecto.metricas || {}
   const kpis = [
     { titulo: 'Clientes', valor: metricas.total_clientes || 0, icono: Users },
@@ -162,12 +166,12 @@ function ProyectoDetallePage() {
       </div>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
-        <Panel titulo="Clientes asignados">
-          {proyecto.clientes.length === 0 ? (
+        <Panel titulo="Clientes individuales">
+          {clientesDirectos.length === 0 ? (
             <EmptyText texto="Sin clientes individuales asignados." />
           ) : (
             <div className="grid gap-3">
-              {proyecto.clientes.map((cliente) => (
+              {clientesDirectos.map((cliente) => (
                 <Item key={cliente.id_usuario} titulo={cliente.nombre} subtitulo={cliente.empresa || cliente.correo} />
               ))}
             </div>
@@ -175,15 +179,15 @@ function ProyectoDetallePage() {
         </Panel>
 
         <Panel titulo="Grupos asignados">
-          {proyecto.grupos_asignados.length === 0 ? (
+          {gruposAsignados.length === 0 ? (
             <EmptyText texto="Sin grupos asignados." />
           ) : (
             <div className="grid gap-3">
-              {proyecto.grupos_asignados.map((grupo) => (
+              {gruposAsignados.map((grupo) => (
                 <Item
                   key={grupo.id_grupo}
                   titulo={grupo.nombre}
-                  subtitulo={`${grupo.integrantes_count} integrantes · ${grupo.estado}`}
+                  subtitulo={`${grupo.integrantes_count} integrantes - ${grupo.estado}`}
                 />
               ))}
             </div>
@@ -191,12 +195,28 @@ function ProyectoDetallePage() {
         </Panel>
       </div>
 
+      <Panel titulo="Clientes relacionados totales" className="mt-6">
+        {clientesRelacionados.length === 0 ? (
+          <EmptyText texto="Sin clientes relacionados." />
+        ) : (
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {clientesRelacionados.map((cliente) => (
+              <Item
+                key={cliente.id_usuario}
+                titulo={cliente.nombre}
+                subtitulo={`${cliente.empresa || cliente.correo} - ${formatearTexto(cliente.origen)}`}
+              />
+            ))}
+          </div>
+        )}
+      </Panel>
+
       <Panel titulo="Progreso individual" className="mt-6">
-        {proyecto.progreso_individual_clientes.length === 0 ? (
+        {progresoIndividual.length === 0 ? (
           <EmptyText texto="Sin progreso individual disponible." />
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {proyecto.progreso_individual_clientes.map((cliente) => (
+            {progresoIndividual.map((cliente) => (
               <article key={cliente.id_usuario} className="rounded-lg border border-slate-800 bg-slate-950 p-4">
                 <p className="font-semibold text-white">{cliente.nombre}</p>
                 <p className="mt-1 text-xs text-slate-500">{cliente.empresa || cliente.correo}</p>
@@ -236,7 +256,7 @@ function ProyectoDetallePage() {
           </SelectFiltro>
           <SelectFiltro name="cliente" value={filtros.cliente} onChange={actualizarFiltro}>
             <option value="">Todos los clientes</option>
-            {proyecto.clientes.map((cliente) => (
+            {clientesRelacionados.map((cliente) => (
               <option key={cliente.id_usuario} value={cliente.id_usuario}>
                 {cliente.nombre}
               </option>

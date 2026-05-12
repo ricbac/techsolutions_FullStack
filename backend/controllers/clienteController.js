@@ -29,9 +29,17 @@ const obtenerDashboardCliente = async (req, res) => {
       `
         SELECT
           (
-            SELECT COUNT(DISTINCT pc.id_proyecto)
-            FROM tb_proyecto_clientes pc
-            WHERE pc.id_cliente = $1
+            SELECT COUNT(DISTINCT proyectos.id_proyecto)
+            FROM (
+              SELECT pc.id_proyecto
+              FROM tb_proyecto_clientes pc
+              WHERE pc.id_cliente = $1
+              UNION
+              SELECT pg.id_proyecto
+              FROM tb_proyecto_grupos pg
+              INNER JOIN tb_grupo_clientes gc ON gc.id_grupo = pg.id_grupo
+              WHERE gc.id_usuario = $1
+            ) proyectos
           )::INT AS "totalProyectosAsignados",
           (
             SELECT COUNT(*)
@@ -86,9 +94,17 @@ const listarProyectosCliente = async (req, res) => {
           p.progreso,
           p.fecha_inicio,
           p.fecha_fin
-        FROM tb_proyecto_clientes pc
-        INNER JOIN tb_proyectos p ON p.id_proyecto = pc.id_proyecto
-        WHERE pc.id_cliente = $1
+        FROM (
+          SELECT pc.id_proyecto
+          FROM tb_proyecto_clientes pc
+          WHERE pc.id_cliente = $1
+          UNION
+          SELECT pg.id_proyecto
+          FROM tb_proyecto_grupos pg
+          INNER JOIN tb_grupo_clientes gc ON gc.id_grupo = pg.id_grupo
+          WHERE gc.id_usuario = $1
+        ) proyectos_cliente
+        INNER JOIN tb_proyectos p ON p.id_proyecto = proyectos_cliente.id_proyecto
         ORDER BY p.fecha_creacion DESC
       `,
       [idCliente],
@@ -122,10 +138,18 @@ const obtenerProyectoClientePorId = async (req, res) => {
           p.fecha_fin,
           p.fecha_creacion,
           p.fecha_actualizacion
-        FROM tb_proyecto_clientes pc
-        INNER JOIN tb_proyectos p ON p.id_proyecto = pc.id_proyecto
-        WHERE pc.id_cliente = $1
-          AND p.id_proyecto = $2
+        FROM (
+          SELECT pc.id_proyecto
+          FROM tb_proyecto_clientes pc
+          WHERE pc.id_cliente = $1
+          UNION
+          SELECT pg.id_proyecto
+          FROM tb_proyecto_grupos pg
+          INNER JOIN tb_grupo_clientes gc ON gc.id_grupo = pg.id_grupo
+          WHERE gc.id_usuario = $1
+        ) proyectos_cliente
+        INNER JOIN tb_proyectos p ON p.id_proyecto = proyectos_cliente.id_proyecto
+        WHERE p.id_proyecto = $2
         LIMIT 1
       `,
       [idCliente, id],

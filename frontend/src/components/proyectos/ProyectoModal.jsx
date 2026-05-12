@@ -44,6 +44,12 @@ function ProyectoModal({
   if (!abierto) return null
 
   const esEditar = modo === 'editar'
+  const clientesEnGruposSeleccionados = new Set(
+    gruposDisponibles
+      .filter((grupo) => formulario.grupos.includes(grupo.id_grupo))
+      .flatMap((grupo) => grupo.integrantes || [])
+      .map((cliente) => cliente.id_usuario),
+  )
 
   return (
     <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-slate-950/80 px-4 py-4 backdrop-blur-sm sm:py-8">
@@ -172,27 +178,40 @@ function ProyectoModal({
                 </p>
               ) : (
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {clientesDisponibles.map((cliente) => (
-                    <label
-                      key={cliente.id_usuario}
-                      className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-800 p-3 hover:bg-slate-900"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={formulario.clientes.includes(cliente.id_usuario)}
-                        onChange={() => onToggleCliente(cliente.id_usuario)}
-                        className="mt-1 h-4 w-4 rounded border-slate-700 bg-slate-950 text-sky-500"
-                      />
-                      <span>
-                        <span className="block text-sm font-semibold text-slate-100">
-                          {cliente.nombre}
+                  {clientesDisponibles.map((cliente) => {
+                    const bloqueadoPorGrupo = clientesEnGruposSeleccionados.has(
+                      cliente.id_usuario,
+                    )
+
+                    return (
+                      <label
+                        key={cliente.id_usuario}
+                        className={`flex items-start gap-3 rounded-lg border border-slate-800 p-3 ${
+                          bloqueadoPorGrupo
+                            ? 'cursor-not-allowed bg-slate-900/60 opacity-70'
+                            : 'cursor-pointer hover:bg-slate-900'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={formulario.clientes.includes(cliente.id_usuario)}
+                          disabled={bloqueadoPorGrupo}
+                          onChange={() => onToggleCliente(cliente.id_usuario)}
+                          className="mt-1 h-4 w-4 rounded border-slate-700 bg-slate-950 text-sky-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        />
+                        <span>
+                          <span className="block text-sm font-semibold text-slate-100">
+                            {cliente.nombre}
+                          </span>
+                          <span className="block text-xs text-slate-500">
+                            {bloqueadoPorGrupo
+                              ? 'Incluido por un grupo seleccionado'
+                              : cliente.empresa || cliente.correo}
+                          </span>
                         </span>
-                        <span className="block text-xs text-slate-500">
-                          {cliente.empresa || cliente.correo}
-                        </span>
-                      </span>
-                    </label>
-                  ))}
+                      </label>
+                    )
+                  })}
                 </div>
               )}
             </div>

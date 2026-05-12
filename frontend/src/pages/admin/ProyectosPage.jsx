@@ -14,6 +14,15 @@ function fechaInput(fecha) {
   return new Date(fecha).toISOString().slice(0, 10)
 }
 
+function obtenerIdsIntegrantesGrupos(gruposDisponibles, gruposSeleccionados) {
+  return new Set(
+    gruposDisponibles
+      .filter((grupo) => gruposSeleccionados.includes(grupo.id_grupo))
+      .flatMap((grupo) => grupo.integrantes || [])
+      .map((cliente) => cliente.id_usuario),
+  )
+}
+
 function ProyectosPage() {
   const navigate = useNavigate()
   const [proyectos, setProyectos] = useState([])
@@ -78,7 +87,9 @@ function ProyectosPage() {
         progreso: Number(data.progreso || 0),
         fecha_inicio: fechaInput(data.fecha_inicio),
         fecha_fin: fechaInput(data.fecha_fin),
-        clientes: data.clientes.map((cliente) => cliente.id_usuario),
+        clientes: (data.clientes_directos || data.clientes || []).map(
+          (cliente) => cliente.id_usuario,
+        ),
         grupos: data.grupos_asignados.map((grupo) => grupo.id_grupo),
       })
       setErrores({})
@@ -103,6 +114,20 @@ function ProyectosPage() {
   }
 
   const alternarCliente = (idCliente) => {
+    const clientesEnGrupos = obtenerIdsIntegrantesGrupos(
+      gruposDisponibles,
+      formulario.grupos,
+    )
+
+    if (clientesEnGrupos.has(idCliente)) {
+      setErrores((prevState) => ({
+        ...prevState,
+        general:
+          'Este cliente ya pertenece a un grupo asignado al proyecto. No es necesario agregarlo individualmente.',
+      }))
+      return
+    }
+
     setFormulario((prevState) => {
       const existe = prevState.clientes.includes(idCliente)
 
@@ -118,14 +143,27 @@ function ProyectosPage() {
   const alternarGrupo = (idGrupo) => {
     setFormulario((prevState) => {
       const existe = prevState.grupos.includes(idGrupo)
+      const gruposActualizados = existe
+        ? prevState.grupos.filter((id) => id !== idGrupo)
+        : [...prevState.grupos, idGrupo]
+      const clientesEnGrupos = obtenerIdsIntegrantesGrupos(
+        gruposDisponibles,
+        gruposActualizados,
+      )
+      const clientesFiltrados = prevState.clientes.filter(
+        (idCliente) => !clientesEnGrupos.has(idCliente),
+      )
 
       return {
         ...prevState,
-        grupos: existe
-          ? prevState.grupos.filter((id) => id !== idGrupo)
-          : [...prevState.grupos, idGrupo],
+        grupos: gruposActualizados,
+        clientes: clientesFiltrados,
       }
     })
+    setErrores((prevState) => ({
+      ...prevState,
+      general: '',
+    }))
   }
 
   const validarFormulario = () => {
